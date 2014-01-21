@@ -20,3 +20,4 @@
 
 mod statemachine;
 mod regex;
+mod scannerdef;

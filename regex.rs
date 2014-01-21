@@ -20,8 +20,8 @@
 
 use statemachine::{StateMachine, StateId, Char, Epsilon};
 
-#[deriving(Clone)]
-enum Regex {
+#[deriving(Clone, IterBytes, Eq)]
+pub enum Regex {
     Leaf(char),
     Kleene(~Regex),
     Seq(~Regex, ~Regex),
@@ -92,8 +92,8 @@ mod test {
         let (sm, start, end) = regex.to_state_machine();
         let end_states = [end];
         let end_states: StateSet = end_states.iter().map(|x| *x).collect();
-        let ToDfaResult { dfa, start_state, mut end_state_map } = sm.to_dfa(start, &end_states);
-        let dfa_end_states = end_state_map.pop(&end).unwrap();
+        let ToDfaResult { dfa, start_state, end_state_map } = sm.to_dfa(start, &end_states);
+        let dfa_end_states = end_state_map.keys().map(|x| *x).to_owned_vec();
 
         let partitioning = dfa.accepting_non_accepting_partitioning(dfa_end_states.iter().map(|s| *s));
         let (minimized_dfa, state_map) = dfa.to_minimal(&partitioning);

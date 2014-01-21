@@ -133,7 +133,7 @@ impl StateMachine {
                 return false;
             }
 
-			if state.transitions.values().any(|dests| dests.len() > 1) {
+			if state.transitions.values().any(|dests| dests.len() != 1) {
 				return false;
 			}
 
@@ -190,6 +190,10 @@ impl StateMachine {
             },
             _ => false
         }
+    }
+
+    pub fn states(&self) -> StateSet {
+        self.states.keys().map(|x| *x).collect::<StateSet>()
     }
 
     pub fn consume(&mut self, lunch: StateMachine) {
@@ -289,11 +293,11 @@ impl StateMachine {
 
             let source_nfa_state_set = dfa_to_nfa.get_copy(&current);
 
-            let mut symbols = ~[];
+            let mut symbols = HashSet::new();
             for nfa_state in source_nfa_state_set.borrow().iter() {
                 for &symbol in self.states.get(nfa_state).transitions.keys() {
                     if symbol != Epsilon {
-                        symbols.push(symbol);
+                        symbols.insert(symbol);
                     }
                 }
             }
@@ -316,6 +320,7 @@ impl StateMachine {
                     Some(&state) => state
                 };
 
+                assert!(!dfa.states.get(&current).transitions.contains_key(&symbol));
                 dfa.add_transition(current, other_state, symbol);
             }
         }
@@ -324,17 +329,12 @@ impl StateMachine {
         assert!(dfa.is_deterministic());
 
         let mut end_state_map = HashMap::new();
-
-        for nfa_end_state in nfa_end_states.iter() {
-            let mut mapping = ~[];
-
-            for (nfa_state_set, &dfa_state) in nfa_to_dfa.iter() {
-                if nfa_state_set.borrow().contains(nfa_end_state) {
-                    mapping.push(dfa_state);
-                }
+        for (dfa_state, nfa_states) in dfa_to_nfa.iter() {
+            if !nfa_end_states.is_disjoint(nfa_states.borrow()) {
+                end_state_map.insert(*dfa_state, nfa_end_states.intersection(nfa_states.borrow())
+                                                               .map(|x| *x)
+                                                               .to_owned_vec());
             }
-
-            end_state_map.insert(*nfa_end_state, mapping);
         }
 
         return ToDfaResult{
@@ -362,6 +362,20 @@ impl StateMachine {
         }
 
         return Some(current_state);
+    }
+
+    pub fn get_successor_state(&self, current_state: StateId, input: char) -> Option<StateId> {
+        assert!(self.is_deterministic());
+        assert!(self.states.contains_key(&current_state));
+        assert!(!self.has_dangling_transitions());
+
+        match self.states.get(&current_state).transitions.find(&Char(input)) {
+            Some(dests) => {
+                assert!(dests.len() == 1);
+                Some(dests[0])
+            }
+            None => None
+        }
     }
 
     pub fn accepting_non_accepting_partitioning<T: Iterator<StateId>>(&self,
@@ -548,7 +562,7 @@ impl StateMachine {
 }
 
 #[deriving(Eq)]
-struct Partitioning(~[StateSet]);
+pub struct Partitioning(~[StateSet]);
 
 #[cfg(test)]
 mod test {
